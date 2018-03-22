@@ -981,11 +981,13 @@ I/O
 - :class:`Timedelta` now supported in :func:`DataFrame.to_excel` for all Excel file types (:issue:`19242`, :issue:`9155`, :issue:`19900`)
 - Bug in :meth:`pandas.io.stata.StataReader.value_labels` raising an ``AttributeError`` when called on very old files. Now returns an empty dict (:issue:`19417`)
 - Bug in :func:`read_pickle` when unpickling objects with :class:`TimedeltaIndex` or :class:`Float64Index` created with pandas prior to version 0.20 (:issue:`19939`)
+- Bug in :meth:`pandas.io.json.json_normalize` where subrecords are not properly normalized if any subrecords values are NoneType (:issue:`20030`)
 
 Plotting
 ^^^^^^^^
 
 - :func:`DataFrame.plot` now raises a ``ValueError`` when the ``x`` or ``y`` argument is improperly formed (:issue:`18671`)
+- Bug in :func:`DataFrame.plot` when ``x`` and ``y`` arguments given as positions caused incorrect referenced columns for line, bar and area plots (:issue:`20056`)
 - Bug in formatting tick labels with ``datetime.time()`` and fractional seconds (:issue:`18478`).
 - :meth:`Series.plot.kde` has exposed the args ``ind`` and ``bw_method`` in the docstring (:issue:`18461`). The argument ``ind`` may now also be an integer (number of sample points).
 
@@ -1041,3 +1043,4 @@ Other
 
 - Improved error message when attempting to use a Python keyword as an identifier in a ``numexpr`` backed query (:issue:`18221`)
 - Bug in accessing a :func:`pandas.get_option`, which raised ``KeyError`` rather than ``OptionError`` when looking up a non-existant option key in some cases (:issue:`19789`)
+- :func:`DataFrame.plot` now supports multiple columns to the ``y`` argument (:issue:`19699`)
