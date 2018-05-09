@@ -24,6 +24,7 @@ from pandas.core.dtypes.common import (
     is_extension_array_dtype,
     is_datetime64tz_dtype,
     is_timedelta64_dtype,
+    is_object_dtype,
     is_list_like,
     is_hashable,
     is_iterator,
@@ -38,8 +39,13 @@ from pandas.core.dtypes.cast import (
     maybe_upcast, infer_dtype_from_scalar,
     maybe_convert_platform,
     maybe_cast_to_datetime, maybe_castable,
-    construct_1d_arraylike_from_scalar)
-from pandas.core.dtypes.missing import isna, notna, remove_na_arraylike
+    construct_1d_arraylike_from_scalar,
+    construct_1d_object_array_from_listlike)
+from pandas.core.dtypes.missing import (
+    isna,
+    notna,
+    remove_na_arraylike,
+    na_value_for_dtype)
 
 from pandas.core.index import (Index, MultiIndex, InvalidIndexError,
                                Float64Index, _ensure_index)
@@ -151,7 +157,7 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         Copy input data
     """
     _metadata = ['name']
-    _accessors = frozenset(['dt', 'cat', 'str'])
+    _accessors = set(['dt', 'cat', 'str'])
     _deprecations = generic.NDFrame._deprecations | frozenset(
         ['asobject', 'sortlevel', 'reshape', 'get_value', 'set_value',
          'from_csv', 'valid'])
@@ -297,6 +303,12 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         # raises KeyError), so we iterate the entire dict, and align
         if data:
             keys, values = zip(*compat.iteritems(data))
+            values = list(values)
+        elif index is not None:
+            # fastpath for Series(data=None). Just use broadcasting a scalar
+            # instead of reindexing.
+            values = na_value_for_dtype(dtype)
+            keys = index
         else:
             keys, values = [], []
 
@@ -304,9 +316,11 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         s = Series(values, index=keys, dtype=dtype)
 
         # Now we just make sure the order is respected, if any
-        if index is not None:
+        if data and index is not None:
             s = s.reindex(index, copy=False)
-        elif not PY36 and not isinstance(data, OrderedDict):
+        elif not PY36 and not isinstance(data, OrderedDict) and data:
+            # Need the `and data` to avoid sorting Series(None, index=[...])
+            # since that isn't really dict-like
             try:
                 s = s.sort_index()
             except TypeError:
@@ -1852,6 +1866,9 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         0.75    3.25
         dtype: float64
 
+        See Also
+        --------
+        pandas.core.window.Rolling.quantile
         """
 
         self._check_percentile(q)
@@ -1994,7 +2011,7 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
     def dot(self, other):
         """
         Matrix multiplication with DataFrame or inner-product with Series
-        objects
+        objects. Can also be called using `self @ other` in Python >= 3.5.
 
         Parameters
         ----------
@@ -2032,6 +2049,14 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
             return np.dot(lvals, rvals)
         else:  # pragma: no cover
             raise TypeError('unsupported type: %s' % type(other))
+
+    def __matmul__(self, other):
+        """ Matrix multiplication using binary `@` operator in Python>=3.5 """
+        return self.dot(other)
+
+    def __rmatmul__(self, other):
+        """ Matrix multiplication using binary `@` operator in Python>=3.5 """
+        return self.dot(other)
 
     @Substitution(klass='Series')
     @Appender(base._shared_docs['searchsorted'])
@@ -3119,7 +3144,7 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         >>> def add_custom_values(x, **kwargs):
         ...     for month in kwargs:
         ...         x+=kwargs[month]
-        ...         return x
+        ...     return x
 
         >>> series.apply(add_custom_values, june=30, july=20, august=25)
         London      95
@@ -3202,7 +3227,8 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
                 return self.copy()
             return self
 
-        new_values = algorithms.take_1d(self._values, indexer)
+        new_values = algorithms.take_1d(self._values, indexer,
+                                        allow_fill=True, fill_value=None)
         return self._constructor(new_values, index=new_index)
 
     def _needs_reindex_multi(self, axes, method, level):
@@ -3397,11 +3423,10 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
 
     @Appender(generic._shared_docs['replace'] % _shared_doc_kwargs)
     def replace(self, to_replace=None, value=None, inplace=False, limit=None,
-                regex=False, method='pad', axis=None):
+                regex=False, method='pad'):
         return super(Series, self).replace(to_replace=to_replace, value=value,
                                            inplace=inplace, limit=limit,
-                                           regex=regex, method=method,
-                                           axis=axis)
+                                           regex=regex, method=method)
 
     @Appender(generic._shared_docs['shift'] % _shared_doc_kwargs)
     def shift(self, periods=1, freq=None, axis=0):
@@ -3478,13 +3503,19 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         return v
 
     @Appender(generic._shared_docs['_take'])
-    def _take(self, indices, axis=0, convert=True, is_copy=False):
-        if convert:
-            indices = maybe_convert_indices(indices, len(self._get_axis(axis)))
+    def _take(self, indices, axis=0, is_copy=False):
 
         indices = _ensure_platform_int(indices)
         new_index = self.index.take(indices)
-        new_values = self._values.take(indices)
+
+        if is_categorical_dtype(self):
+            # https://github.com/pandas-dev/pandas/issues/20664
+            # TODO: remove when the default Categorical.take behavior changes
+            indices = maybe_convert_indices(indices, len(self._get_axis(axis)))
+            kwargs = {'allow_fill': False}
+        else:
+            kwargs = {}
+        new_values = self._values.take(indices, **kwargs)
 
         result = (self._constructor(new_values, index=new_index,
                                     fastpath=True).__finalize__(self))
@@ -3553,7 +3584,7 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
         5    False
         Name: animal, dtype: bool
         """
-        result = algorithms.isin(com._values_from_object(self), values)
+        result = algorithms.isin(self, values)
         return self._constructor(result, index=self.index).__finalize__(self)
 
     def between(self, left, right, inclusive=True):
@@ -3879,32 +3910,6 @@ class Series(base.IndexOpsMixin, generic.NDFrame):
                       "Use .dropna instead.", FutureWarning, stacklevel=2)
         return self.dropna(inplace=inplace, **kwargs)
 
-    @Appender(generic._shared_docs['valid_index'] % {
-        'position': 'first', 'klass': 'Series'})
-    def first_valid_index(self):
-        if len(self) == 0:
-            return None
-
-        mask = isna(self._values)
-        i = mask.argmin()
-        if mask[i]:
-            return None
-        else:
-            return self.index[i]
-
-    @Appender(generic._shared_docs['valid_index'] % {
-        'position': 'last', 'klass': 'Series'})
-    def last_valid_index(self):
-        if len(self) == 0:
-            return None
-
-        mask = isna(self._values[::-1])
-        i = mask.argmin()
-        if mask[i]:
-            return None
-        else:
-            return self.index[len(self) - i - 1]
-
     # ----------------------------------------------------------------------
     # Time series-oriented methods
 
@@ -4034,7 +4039,13 @@ def _sanitize_array(data, index, dtype=None, copy=False,
 
         try:
             subarr = maybe_cast_to_datetime(arr, dtype)
-            if not is_extension_type(subarr):
+            # Take care in creating object arrays (but iterators are not
+            # supported):
+            if is_object_dtype(dtype) and (is_list_like(subarr) and
+                                           not (is_iterator(subarr) or
+                                           isinstance(subarr, np.ndarray))):
+                subarr = construct_1d_object_array_from_listlike(subarr)
+            elif not is_extension_type(subarr):
                 subarr = np.array(subarr, dtype=dtype, copy=copy)
         except (ValueError, TypeError):
             if is_categorical_dtype(dtype):
@@ -4156,9 +4167,10 @@ def _sanitize_array(data, index, dtype=None, copy=False,
     if issubclass(subarr.dtype.type, compat.string_types):
         # GH 16605
         # If not empty convert the data to dtype
-        if not isna(data).all():
-            data = np.array(data, dtype=dtype, copy=False)
-
-        subarr = np.array(data, dtype=object, copy=copy)
+        # GH 19853: If data is a scalar, subarr has already the result
+        if not is_scalar(data):
+            if not np.all(isna(data)):
+                data = np.array(data, dtype=dtype, copy=False)
+            subarr = np.array(data, dtype=object, copy=copy)
 
     return subarr

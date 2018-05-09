@@ -157,10 +157,27 @@ class TestDateRanges(TestData):
         start = datetime(2011, 1, 1, 5, 3, 40)
         end = datetime(2011, 1, 1, 8, 9, 40)
 
-        msg = ('Of the three parameters: start, end, and periods, '
-               'exactly two must be specified')
+        msg = ('Of the four parameters: start, end, periods, and '
+               'freq, exactly three must be specified')
         with tm.assert_raises_regex(ValueError, msg):
             date_range(start, end, periods=10, freq='s')
+
+    def test_date_range_convenience_periods(self):
+        # GH 20808
+        rng = date_range('2018-04-24', '2018-04-27', periods=3)
+        exp = DatetimeIndex(['2018-04-24 00:00:00', '2018-04-25 12:00:00',
+                             '2018-04-27 00:00:00'], freq=None)
+
+        tm.assert_index_equal(rng, exp)
+
+        # Test if spacing remains linear if tz changes to dst in range
+        rng = date_range('2018-04-01 01:00:00', '2018-04-01 04:00:00',
+                         tz='Australia/Sydney', periods=3)
+        exp = DatetimeIndex(['2018-04-01 01:00:00+11:00',
+                             '2018-04-01 02:00:00+11:00',
+                             '2018-04-01 02:00:00+10:00',
+                             '2018-04-01 03:00:00+10:00',
+                             '2018-04-01 04:00:00+10:00'], freq=None)
 
     def test_date_range_businesshour(self):
         idx = DatetimeIndex(['2014-07-04 09:00', '2014-07-04 10:00',
@@ -198,8 +215,8 @@ class TestDateRanges(TestData):
 
     def test_range_misspecified(self):
         # GH #1095
-        msg = ('Of the three parameters: start, end, and periods, '
-               'exactly two must be specified')
+        msg = ('Of the four parameters: start, end, periods, and '
+               'freq, exactly three must be specified')
 
         with tm.assert_raises_regex(ValueError, msg):
             date_range(start='1/1/2000')
@@ -235,6 +252,12 @@ class TestDateRanges(TestData):
         # blow up, don't loop forever
         pytest.raises(Exception, date_range, datetime(2011, 11, 11),
                       datetime(2011, 11, 12), freq=offset)
+
+    @pytest.mark.parametrize('periods', (1, 2))
+    def test_wom_len(self, periods):
+        # https://github.com/pandas-dev/pandas/issues/20517
+        res = date_range(start='20110101', periods=periods, freq='WOM-1MON')
+        assert len(res) == periods
 
 
 class TestGenRangeGeneration(object):
@@ -331,21 +354,21 @@ class TestBusinessDateRange(object):
             aware.join(naive)
 
     def test_cached_range(self):
-        DatetimeIndex._cached_range(START, END, offset=BDay())
-        DatetimeIndex._cached_range(START, periods=20, offset=BDay())
-        DatetimeIndex._cached_range(end=START, periods=20, offset=BDay())
+        DatetimeIndex._cached_range(START, END, freq=BDay())
+        DatetimeIndex._cached_range(START, periods=20, freq=BDay())
+        DatetimeIndex._cached_range(end=START, periods=20, freq=BDay())
 
-        with tm.assert_raises_regex(TypeError, "offset"):
+        with tm.assert_raises_regex(TypeError, "freq"):
             DatetimeIndex._cached_range(START, END)
 
         with tm.assert_raises_regex(TypeError, "specify period"):
-            DatetimeIndex._cached_range(START, offset=BDay())
+            DatetimeIndex._cached_range(START, freq=BDay())
 
         with tm.assert_raises_regex(TypeError, "specify period"):
-            DatetimeIndex._cached_range(end=END, offset=BDay())
+            DatetimeIndex._cached_range(end=END, freq=BDay())
 
         with tm.assert_raises_regex(TypeError, "start or end"):
-            DatetimeIndex._cached_range(periods=20, offset=BDay())
+            DatetimeIndex._cached_range(periods=20, freq=BDay())
 
     def test_cached_range_bug(self):
         rng = date_range('2010-09-01 05:00:00', periods=50,
@@ -393,7 +416,7 @@ class TestBusinessDateRange(object):
         # GH #456
         rng1 = bdate_range('12/5/2011', '12/5/2011')
         rng2 = bdate_range('12/2/2011', '12/5/2011')
-        rng2.offset = BDay()
+        rng2.freq = BDay()
 
         result = rng1.union(rng2)
         assert isinstance(result, DatetimeIndex)
@@ -605,27 +628,27 @@ class TestCustomDateRange(object):
             bdate_range('2011-1-1', '2012-1-1', 'C')
 
     def test_cached_range(self):
-        DatetimeIndex._cached_range(START, END, offset=CDay())
+        DatetimeIndex._cached_range(START, END, freq=CDay())
         DatetimeIndex._cached_range(START, periods=20,
-                                    offset=CDay())
+                                    freq=CDay())
         DatetimeIndex._cached_range(end=START, periods=20,
-                                    offset=CDay())
+                                    freq=CDay())
 
         # with pytest.raises(TypeError):
-        with tm.assert_raises_regex(TypeError, "offset"):
+        with tm.assert_raises_regex(TypeError, "freq"):
             DatetimeIndex._cached_range(START, END)
 
         # with pytest.raises(TypeError):
         with tm.assert_raises_regex(TypeError, "specify period"):
-            DatetimeIndex._cached_range(START, offset=CDay())
+            DatetimeIndex._cached_range(START, freq=CDay())
 
         # with pytest.raises(TypeError):
         with tm.assert_raises_regex(TypeError, "specify period"):
-            DatetimeIndex._cached_range(end=END, offset=CDay())
+            DatetimeIndex._cached_range(end=END, freq=CDay())
 
         # with pytest.raises(TypeError):
         with tm.assert_raises_regex(TypeError, "start or end"):
-            DatetimeIndex._cached_range(periods=20, offset=CDay())
+            DatetimeIndex._cached_range(periods=20, freq=CDay())
 
     def test_misc(self):
         end = datetime(2009, 5, 13)
@@ -640,7 +663,7 @@ class TestCustomDateRange(object):
         # GH #456
         rng1 = bdate_range('12/5/2011', '12/5/2011', freq='C')
         rng2 = bdate_range('12/2/2011', '12/5/2011', freq='C')
-        rng2.offset = CDay()
+        rng2.freq = CDay()
 
         result = rng1.union(rng2)
         assert isinstance(result, DatetimeIndex)

@@ -9,18 +9,33 @@
 <table>
 <tr>
   <td>Latest Release</td>
-  <td><img src="https://img.shields.io/pypi/v/pandas.svg" alt="latest release" /></td>
+  <td>
+    <a href="https://pypi.org/project/pandas/">
+    <img src="https://img.shields.io/pypi/v/pandas.svg" alt="latest release" />
+    </a>
+  </td>
 </tr>
   <td></td>
-  <td><img src="https://anaconda.org/conda-forge/pandas/badges/version.svg" alt="latest release" /></td>
+  <td>
+    <a href="https://anaconda.org/anaconda/pandas/">
+    <img src="https://anaconda.org/conda-forge/pandas/badges/version.svg" alt="latest release" />
+    </a>
+</td>
 </tr>
 <tr>
   <td>Package Status</td>
-  <td><img src="https://img.shields.io/pypi/status/pandas.svg" alt="status" /></td>
+  <td>
+		<a href="https://pypi.org/project/pandas/">
+		<img src="https://img.shields.io/pypi/status/pandas.svg" alt="status" /></td>
+		</a>
 </tr>
 <tr>
   <td>License</td>
-  <td><img src="https://img.shields.io/pypi/l/pandas.svg" alt="license" /></td>
+  <td>
+    <a href="https://github.com/pandas-dev/pandas/blob/master/LICENSE">
+    <img src="https://img.shields.io/pypi/l/pandas.svg" alt="license" />
+    </a>
+</td>
 </tr>
 <tr>
   <td>Build Status</td>
@@ -48,18 +63,14 @@
 </tr>
 <tr>
   <td>Coverage</td>
-  <td><img src="https://codecov.io/github/pandas-dev/pandas/coverage.svg?branch=master" alt="coverage" /></td>
-</tr>
-<tr>
-  <td>Conda</td>
-  <td>
-    <a href="https://pandas.pydata.org">
-    <img src="http://pubbadges.s3-website-us-east-1.amazonaws.com/pkgs-downloads-pandas.png" alt="conda default downloads" />
+  <td>
+    <a href="https://codecov.io/gh/pandas-dev/pandas">
+    <img src="https://codecov.io/github/pandas-dev/pandas/coverage.svg?branch=master" alt="coverage" />
     </a>
   </td>
 </tr>
 <tr>
-  <td>Conda-forge</td>
+  <td>Downloads</td>
   <td>
     <a href="https://pandas.pydata.org">
     <img src="https://anaconda.org/conda-forge/pandas/badges/downloads.svg" alt="conda-forge downloads" />
@@ -67,16 +78,16 @@
   </td>
 </tr>
 <tr>
-  <td>PyPI</td>
-  <td>
-    <a href="https://pypi.python.org/pypi/pandas/">
-    <img src="https://img.shields.io/pypi/dm/pandas.svg" alt="pypi downloads" />
-    </a>
-  </td>
+	<td>Gitter</td>
+	<td>
+		<a href="https://gitter.im/pydata/pandas">
+		<img src="https://badges.gitter.im/Join%20Chat.svg"
+	</a>
+	</td>
 </tr>
 </table>
 
-[![https://gitter.im/pydata/pandas](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/pydata/pandas?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 
 ## What is it
 
@@ -147,7 +158,7 @@ The source code is currently hosted on GitHub at:
 https://github.com/pandas-dev/pandas
 
 Binary installers for the latest released version are available at the [Python
-package index](https://pypi.python.org/pypi/pandas) and on conda.
+package index](https://pypi.org/project/pandas) and on conda.
 
 ```sh
 # conda
@@ -160,7 +171,7 @@ pip install pandas
 ```
 
 ## Dependencies
-- [NumPy](http://www.numpy.org): 1.9.0 or higher
+- [NumPy](https://www.numpy.org): 1.9.0 or higher
 - [python-dateutil](https://labix.org/python-dateutil): 2.5.0 or higher
 - [pytz](https://pythonhosted.org/pytz): 2011k or higher
 
